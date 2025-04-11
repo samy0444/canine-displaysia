@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: video-processing-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: video-processing-service
+  template:
+    metadata:
+      labels:
+        app: video-processing-service
+    spec:
+      containers:
+      - name: video-processing-container
+        image: your-docker-image-name:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DEVICE
+          value: cuda  # Use 'cpu' if no GPU available in cluster nodes.
