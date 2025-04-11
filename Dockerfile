@@ -27,7 +27,7 @@ COPY . .
 EXPOSE 8080
 
 # Command to run the FastAPI application with Uvicorn server
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "new-websocket:app", "--host", "0.0.0.0", "--port", "8080"]
 
 
 
