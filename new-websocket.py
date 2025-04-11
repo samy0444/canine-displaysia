@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 from collections import deque
 from torch import nn
+from fastapi import WebSocket, WebSocketException, WebSocketDisconnect
+
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -76,6 +78,79 @@ async def load_models():
     lstm_model.to(device).eval()
 
 
+# @app.websocket("/ws/process-video")
+# async def process_video_stream(websocket: WebSocket):
+#     """
+#     Handle real-time video processing via WebSocket.
+#     """
+#     await websocket.accept()
+    
+#     pose_buffer = deque(maxlen=BUFFER_SIZE)
+#     max_prob = 0.0
+
+#     try:
+#         while True:
+#             # Receive frame from client (as binary data)
+#             frame_bytes = await websocket.receive_bytes()
+
+#             # Decode the frame (assumes JPEG format)
+#             frame_array = np.frombuffer(frame_bytes, np.uint8)
+#             frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
+
+#             if frame is None:
+#                 raise HTTPException(status_code=400, detail="Invalid frame received")
+
+#             # Resize and convert frame to RGB format for YOLOv8 processing
+#             frame_resized = cv2.resize(frame, (640, 640))
+#             rgb_frame = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+
+#             # Perform dog detection using YOLOv8 detection model
+#             results = detector(rgb_frame)
+#             boxes = results.xyxy[0].cpu().numpy()
+            
+#             dog_boxes = [box for box in boxes if int(box[5]) == 16]  # COCO class 16: Dog
+
+#             for box in dog_boxes:
+#                 x1, y1, x2, y2 = map(int, box[:4])
+#                 dog_roi = rgb_frame[y1:y2, x1:x2]
+
+#                 if dog_roi.size == 0:
+#                     continue
+
+#                 # Perform keypoint extraction using YOLOv8 pose estimation model
+#                 pose_results = pose_estimator(dog_roi)
+#                 if pose_results.xykpt[0] is not None:
+#                     kps = pose_results.xykpt[0].cpu().numpy().flatten()
+
+#                     if kps.shape == (51,):
+#                         pose_buffer.append(kps)
+
+#                     # Pad buffer if necessary
+#                     while len(pose_buffer) < BUFFER_SIZE:
+#                         pose_buffer.append(np.zeros(51))
+
+#                     # Perform dysplasia prediction when buffer is full
+#                     if len(pose_buffer) == BUFFER_SIZE:
+#                         seq_tensor = torch.tensor(np.array(pose_buffer), dtype=torch.float32).unsqueeze(0).to(device)
+
+#                         with torch.no_grad():
+#                             prob = lstm_model(seq_tensor).item()
+
+#                         max_prob = max(max_prob, prob)
+
+#                         diagnosis = "Dysplasia Detected" if max_prob > DYSPLASIA_THRESHOLD else "Normal"
+                        
+#                         # Send results back to client via WebSocket
+#                         await websocket.send_json({
+#                             "status": "success",
+#                             "dysplasia_probability": round(max_prob * 100, 2),
+#                             "diagnosis": diagnosis,
+#                         })
+    
+#     except Exception as e:
+#         await websocket.close(code=1006)
+#         raise HTTPException(status_code=500, detail=str(e))
+
 @app.websocket("/ws/process-video")
 async def process_video_stream(websocket: WebSocket):
     """
@@ -85,7 +160,7 @@ async def process_video_stream(websocket: WebSocket):
     
     pose_buffer = deque(maxlen=BUFFER_SIZE)
     max_prob = 0.0
-
+    print("real-time video processing via WebSocket")
     try:
         while True:
             # Receive frame from client (as binary data)
@@ -94,9 +169,9 @@ async def process_video_stream(websocket: WebSocket):
             # Decode the frame (assumes JPEG format)
             frame_array = np.frombuffer(frame_bytes, np.uint8)
             frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
-
+            print("frame")
             if frame is None:
-                raise HTTPException(status_code=400, detail="Invalid frame received")
+                raise WebSocketException(code=1003, reason="Invalid frame received")
 
             # Resize and convert frame to RGB format for YOLOv8 processing
             frame_resized = cv2.resize(frame, (640, 640))
@@ -107,7 +182,7 @@ async def process_video_stream(websocket: WebSocket):
             boxes = results.xyxy[0].cpu().numpy()
             
             dog_boxes = [box for box in boxes if int(box[5]) == 16]  # COCO class 16: Dog
-
+            print("dog_boxes")
             for box in dog_boxes:
                 x1, y1, x2, y2 = map(int, box[:4])
                 dog_roi = rgb_frame[y1:y2, x1:x2]
@@ -145,9 +220,13 @@ async def process_video_stream(websocket: WebSocket):
                             "diagnosis": diagnosis,
                         })
     
+    except WebSocketDisconnect:
+        print("Client disconnected")
     except Exception as e:
-        await websocket.close(code=1006)
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error: {str(e)}")
+        await websocket.close(code=1001, reason="Server error occurred")
+
+
 
 
 if __name__ == "__main__":
