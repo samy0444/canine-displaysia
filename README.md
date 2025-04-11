@@ -1,5 +1,7 @@
 # canine-displaysia
 
+* git pull origin main --allow-unrelated-histories
+
 ### Install dependencies locally
 
 * pip install fastapi uvicorn torch torchvision numpy opencv-python-headless ultralytics python-multipart websockets
